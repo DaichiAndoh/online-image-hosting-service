@@ -5,16 +5,138 @@ use Response\Render\HTMLRenderer;
 use Response\Render\JSONRenderer;
 use Helpers\DatabaseHelper;
 use Helpers\ValidationHelper;
-use Helpers\DateTimeHelper;
+use Helpers\ImageHelper;
+use Helpers\StringHelper;
+use Exceptions\ValidationException;
+use Exceptions\FileUploadException;
+use Exceptions\FileDeletionException;
+use Exceptions\NotFoundException;
 
 return [
     '/' => function(string $path): HTTPRenderer {
         return new HTMLRenderer('form', []);
     },
     '/create' => function(string $path): HTTPRenderer {
-        return new HTMLRenderer('create', []);
+        try {
+            // validate file
+            if (count($_FILES) === 0) {
+                throw new ValidationException('File is not selected.');
+            }
+            $fileType = $_FILES['file']['type'];
+            $fileSize = $_FILES['file']['size'];
+            $isValidType = ValidationHelper::imageType($fileType);
+            if (!$isValidType) {
+                throw new ValidationException(
+                    'Invalid file type. Only JPG, JPEG, PNG, and GIF files are allowed.'
+                );
+            }
+            $isValidSize = ValidationHelper::fileSize($fileSize);
+            if (!$isValidSize) {
+                throw new ValidationException('File size is too large.');
+            }
+
+            // insert file data to db
+            $clientIp = $_SERVER['REMOTE_ADDR'];
+            $extension = ImageHelper::imageTypeToExtension($fileType);
+            $shareKey = StringHelper::generateRandomStr();
+            $deleteKey = StringHelper::generateRandomStr();
+            $insertedId = DatabaseHelper::createImage($clientIp, $extension, $shareKey, $deleteKey);
+            DatabaseHelper::createViewCount($insertedId);
+
+            // save file
+            $targetDir = sprintf("%s/../UserFiles/%s", __DIR__, $extension);
+            if (!file_exists($targetDir)) {
+                mkdir($targetDir, 0777, true);
+            }
+            $targetFile = sprintf("%s/%s.%s", $targetDir, $shareKey, $extension);
+            if (!move_uploaded_file($_FILES['file']['tmp_name'], $targetFile)) {
+                throw new FileUploadException(
+                    'There was an error uploading your file. Please try again.'
+                );
+            }
+
+            // create urls
+            $shareUrl = "http://localhost:8000/share/{$extension}/{$shareKey}";
+            $deleteUrl = "http://localhost:8000/delete/{$extension}/{$deleteKey}";
+
+            return new JSONRenderer(["shareUrl" => $shareUrl, "deleteUrl" => $deleteUrl]);
+        } catch (ValidationException | FileUploadException $e) {
+            return new JSONRenderer(["error" => $e->getMessage()]);
+        }
     },
     '/share' => function(string $path): HTTPRenderer{
-        return new HTMLRenderer('share', []);
+        try {
+            // get image info
+            $pathArray = preg_split('/\//', $path);
+            $extension = $pathArray[2];
+            $shareKey = $pathArray[3];
+
+            // get image data from db
+            $image = DatabaseHelper::getImage($extension, $shareKey);
+            if (!$image) throw new NotFoundException('The image was not found.');
+
+            // get image from storage
+            $imagePath = sprintf(
+                "%s/../UserFiles/%s/%s.%s",
+                __DIR__,
+                $extension,
+                $shareKey,
+                $extension,
+            );
+            if (!file_exists($imagePath)) throw new NotFoundException('The image was not found.');
+
+            // update last_viewed_at
+            DatabaseHelper::updateImageLastViewedAt($image['id']);
+
+            // update and get view count
+            DatabaseHelper::incrementViewCount($image['id']);
+            $viewCount = DatabaseHelper::getViewCount($image['id']);
+            if (!$viewCount) throw new NotFoundException('The image was not found.');
+
+            // encode image
+            $imageData = file_get_contents($imagePath);
+            $imageData = base64_encode($imageData);
+
+            return new HTMLRenderer('share', ['extension' => $extension, 'imageData' => $imageData, 'viewCount' => $viewCount['count']]);
+        } catch (NotFoundException $e) {
+            return new HTMLRenderer('invalid', []);
+        }
+    },
+    '/delete' => function(string $path): HTTPRenderer{
+        try {
+            // get image info
+            $pathArray = preg_split('/\//', $path);
+            $extension = $pathArray[2];
+            $deleteKey = $pathArray[3];
+
+            // get image data from db
+            $image = DatabaseHelper::getImage($extension, $deleteKey, true);
+            if (!$image) throw new NotFoundException('The image was not found.');
+
+            // delete image from storage
+            $imagePath = sprintf(
+                "%s/../UserFiles/%s/%s.%s",
+                __DIR__,
+                $extension,
+                $image['share_key'],
+                $extension,
+            );
+            if (!file_exists($imagePath)) {
+                throw new NotFoundException('The image was not found.');
+            }
+            if (!unlink($imagePath)) {
+                throw new FileDeletionException('Failed to delete file. Please try again.');
+            }
+
+            // delete image data from db
+            DatabaseHelper::deleteImage($image['id']);
+            DatabaseHelper::deleteViewCount($image['id']);
+
+            return new HTMLRenderer('delete', ["message" => "Image has been successfully deleted."]);
+        } catch (NotFoundException $e) {
+            return new HTMLRenderer('invalid', []);
+        } catch (FileDeletionException $e) {
+            return new HTMLRenderer('delete', ["message" => $e->getMessage()]);
+        }
     },
 ];

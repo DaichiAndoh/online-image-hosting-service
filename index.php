@@ -2,6 +2,10 @@
 spl_autoload_extensions(".php");
 spl_autoload_register();
 
+use Exceptions\ValidationException;
+use Exceptions\FileUploadException;
+use Exceptions\NotFoundException;
+
 $DEBUG = true;
 
 // ルートの読み込み
@@ -13,11 +17,14 @@ $path = $originalPath;
 if (preg_match_all('/\/share\/.+/', $path)) {
     $path = '/share';
 }
+if (preg_match_all('/\/delete\/.+/', $path)) {
+    $path = '/delete';
+}
 
 // ルートにパスが存在するかチェック
 if (isset($routes[$path])) {
     // コールバックを呼び出してrendererを作成
-    try{
+    try {
         $renderer = $routes[$path]($originalPath);
 
         // ヘッダーを設定
@@ -35,6 +42,12 @@ if (isset($routes[$path])) {
         }
 
         print($renderer->getContent());
+    }
+    catch (ValidationException | FileUploadException $e) {
+        session_start();
+        $_SESSION['error_message'] = $e->getMessage();
+        http_response_code(302);
+        header("Location: /");
     }
     catch (Exception $e) {
         http_response_code(500);

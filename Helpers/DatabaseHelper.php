@@ -33,6 +33,19 @@ class DatabaseHelper {
         return $image;
     }
 
+    public static function getImageCountSameIp(string $ip): int {
+        $db = new MySQLWrapper();
+
+        $stmt = $db->prepare("SELECT COUNT(*) AS count FROM images WHERE ip = ? AND DATE(created_at) = CURRENT_DATE");
+        $stmt->bind_param('s', $ip);
+        $stmt->execute();
+
+        $result = $stmt->get_result();
+        $count = $result->fetch_assoc();
+
+        return $count['count'];
+    }
+
     public static function deleteImage(int $id): void {
         $db = new MySQLWrapper();
 

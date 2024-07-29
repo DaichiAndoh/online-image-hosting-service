@@ -12,6 +12,8 @@ use Exceptions\FileUploadException;
 use Exceptions\FileDeletionException;
 use Exceptions\NotFoundException;
 
+require_once(sprintf("%s/../Constants/FileConstants.php", __DIR__));
+
 return [
     '/' => function(string $path): HTTPRenderer {
         return new HTMLRenderer('form', []);
@@ -20,7 +22,7 @@ return [
         try {
             // validate file
             if (count($_FILES) === 0) {
-                throw new ValidationException('File is not selected.');
+                throw new ValidationException('The file is not selected.');
             }
             $fileType = $_FILES['file']['type'];
             $fileSize = $_FILES['file']['size'];
@@ -32,11 +34,15 @@ return [
             }
             $isValidSize = ValidationHelper::fileSize($fileSize);
             if (!$isValidSize) {
-                throw new ValidationException('File size is too large.');
+                throw new ValidationException('The file size is too large. The maximum allowed size is 3MB.');
+            }
+            $clientIp = $_SERVER['REMOTE_ADDR'];
+            $uploadedImageCount = DatabaseHelper::getImageCountSameIp($clientIp);
+            if ($uploadedImageCount >= UPLOAD_LIMIT_PER_DAY) {
+                throw new ValidationException('You have reached the daily upload limit. You can upload a maximum of 3 images per day. Please try again tomorrow.');
             }
 
             // insert file data to db
-            $clientIp = $_SERVER['REMOTE_ADDR'];
             $extension = ImageHelper::imageTypeToExtension($fileType);
             $shareKey = StringHelper::generateRandomStr();
             $deleteKey = StringHelper::generateRandomStr();

@@ -41,50 +41,12 @@ class DatabaseHelper {
         $stmt->execute();
     }
 
-    public static function updateImageLastViewedAt(int $id): void {
+    public static function updateImage(int $id): void {
         $db = new MySQLWrapper();
         $currentDateTime = DateTimeHelper::getCurrentDateTimeStr();
 
-        $stmt = $db->prepare("UPDATE images SET last_viewed_at = ? WHERE id = ?");
+        $stmt = $db->prepare("UPDATE images SET last_viewed_at = ?, view_count = view_count + 1 WHERE id = ?");
         $stmt->bind_param('si', $currentDateTime, $id);
-        $stmt->execute();
-    }
-
-    public static function createViewCount(int $imageId): void {
-        $db = new MySQLWrapper();
-
-        $stmt = $db->prepare("INSERT INTO view_counts (image_id, count) VALUES (?, 0)");
-        $stmt->bind_param('i', $imageId);
-        $stmt->execute();
-    }
-
-    public static function incrementViewCount(int $imageId): void {
-        $db = new MySQLWrapper();
-
-        $stmt = $db->prepare("UPDATE view_counts SET count = count + 1 WHERE image_id = ?");
-        $stmt->bind_param('i', $imageId);
-        $stmt->execute();
-    }
-
-    public static function getViewCount(int $imageId): array {
-        $db = new MySQLWrapper();
-
-        $stmt = $db->prepare("SELECT * FROM view_counts WHERE image_id = ?");
-        $stmt->bind_param('i', $imageId);
-        $stmt->execute();
-
-        $result = $stmt->get_result();
-        $viewCount = $result->fetch_assoc();
-
-        if (!$viewCount) return null;
-        return $viewCount;
-    }
-
-    public static function deleteViewCount(int $imageId): void {
-        $db = new MySQLWrapper();
-
-        $stmt = $db->prepare("DELETE FROM view_counts WHERE image_id = ?");
-        $stmt->bind_param('i', $imageId);
         $stmt->execute();
     }
 }

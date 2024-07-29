@@ -40,8 +40,7 @@ return [
             $extension = ImageHelper::imageTypeToExtension($fileType);
             $shareKey = StringHelper::generateRandomStr();
             $deleteKey = StringHelper::generateRandomStr();
-            $insertedId = DatabaseHelper::createImage($clientIp, $extension, $shareKey, $deleteKey);
-            DatabaseHelper::createViewCount($insertedId);
+            DatabaseHelper::createImage($clientIp, $extension, $shareKey, $deleteKey);
 
             // save file
             $targetDir = sprintf("%s/../UserFiles/%s", __DIR__, $extension);
@@ -85,19 +84,14 @@ return [
             );
             if (!file_exists($imagePath)) throw new NotFoundException('The image was not found.');
 
-            // update last_viewed_at
-            DatabaseHelper::updateImageLastViewedAt($image['id']);
-
-            // update and get view count
-            DatabaseHelper::incrementViewCount($image['id']);
-            $viewCount = DatabaseHelper::getViewCount($image['id']);
-            if (!$viewCount) throw new NotFoundException('The image was not found.');
+            // update image
+            DatabaseHelper::updateImage($image['id']);
 
             // encode image
             $imageData = file_get_contents($imagePath);
             $imageData = base64_encode($imageData);
 
-            return new HTMLRenderer('share', ['extension' => $extension, 'imageData' => $imageData, 'viewCount' => $viewCount['count']]);
+            return new HTMLRenderer('share', ['extension' => $extension, 'imageData' => $imageData, 'viewCount' => $image['view_count']]);
         } catch (NotFoundException $e) {
             return new HTMLRenderer('invalid', []);
         }
@@ -113,6 +107,9 @@ return [
             $image = DatabaseHelper::getImage($extension, $deleteKey, true);
             if (!$image) throw new NotFoundException('The image was not found.');
 
+            // delete image data from db
+            DatabaseHelper::deleteImage($image['id']);
+
             // delete image from storage
             $imagePath = sprintf(
                 "%s/../UserFiles/%s/%s.%s",
@@ -127,10 +124,6 @@ return [
             if (!unlink($imagePath)) {
                 throw new FileDeletionException('Failed to delete file. Please try again.');
             }
-
-            // delete image data from db
-            DatabaseHelper::deleteImage($image['id']);
-            DatabaseHelper::deleteViewCount($image['id']);
 
             return new HTMLRenderer('delete', ["message" => "Image has been successfully deleted."]);
         } catch (NotFoundException $e) {

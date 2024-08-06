@@ -7,6 +7,7 @@ use Helpers\DatabaseHelper;
 use Helpers\ValidationHelper;
 use Helpers\ImageHelper;
 use Helpers\StringHelper;
+use Helpers\Settings;
 use Exceptions\ValidationException;
 use Exceptions\FileUploadException;
 use Exceptions\FileDeletionException;
@@ -61,8 +62,9 @@ return [
             }
 
             // create urls
-            $shareUrl = "http://localhost:8000/share/{$extension}/{$shareKey}";
-            $deleteUrl = "http://localhost:8000/delete/{$extension}/{$deleteKey}";
+            $baseUrl = Settings::env('URL');
+            $shareUrl = sprintf("%s/share/%s/%s", $baseUrl, $extension, $shareKey);
+            $deleteUrl = sprintf("%s/delete/%s/%s", $baseUrl, $extension, $deleteKey);
 
             return new JSONRenderer(["shareUrl" => $shareUrl, "deleteUrl" => $deleteUrl]);
         } catch (ValidationException | FileUploadException $e) {

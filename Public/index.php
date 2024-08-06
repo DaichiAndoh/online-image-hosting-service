@@ -1,15 +1,14 @@
 <?php
 spl_autoload_extensions(".php");
-spl_autoload_register();
-
-use Exceptions\ValidationException;
-use Exceptions\FileUploadException;
-use Exceptions\NotFoundException;
+spl_autoload_register(function($name) {
+    $filepath = __DIR__ . "/../" . str_replace('\\', '/', $name) . ".php";
+    require_once $filepath;
+});
 
 $DEBUG = true;
 
 // ルートの読み込み
-$routes = include('Routing/routes.php');
+$routes = include('../Routing/routes.php');
 
 // リクエストURIを解析してパスだけを取得
 $originalPath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -42,12 +41,6 @@ if (isset($routes[$path])) {
         }
 
         print($renderer->getContent());
-    }
-    catch (ValidationException | FileUploadException $e) {
-        session_start();
-        $_SESSION['error_message'] = $e->getMessage();
-        http_response_code(302);
-        header("Location: /");
     }
     catch (Exception $e) {
         http_response_code(500);

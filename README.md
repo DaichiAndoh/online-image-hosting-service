@@ -8,7 +8,10 @@
 
 ## URL
 
-https://oihs.d-andoh.com
+> [!WARNING]
+> 現在このURLは無効です。
+
+~~https://oihs.d-andoh.com~~
 
 ## About
 
